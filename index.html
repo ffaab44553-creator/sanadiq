@@ -71,7 +71,11 @@ button.link:hover{color:var(--bad)}
 .carry{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .carry input{width:140px}
 form.add{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:8px}
-@media (max-width:480px){form.add{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}form.add button{grid-column:1/-1}}
+form.add.dur{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto}
+select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 8px;min-width:0;width:100%}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:480px){form.add,form.add.dur{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}form.add button{grid-column:1/-1}}
+.term{display:inline-block;font-size:.75rem;font-weight:600;color:var(--obl);background:var(--obl-soft);border-radius:999px;padding:1px 8px;margin-inline-start:6px;text-decoration:none}
 ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 ul.list li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
 ul.list li:last-child{border-bottom:none}
@@ -162,7 +166,7 @@ function exampleState(){return{
   incomes:[{id:uid(),label:"عميل: تصميم شعار",amt:2500,date:dayStr()},{id:uid(),label:"عميل: موقع متجر",amt:3500,date:dayStr()}],
   expenses:[{id:uid(),label:"بقالة",amt:620},{id:uid(),label:"بنزين",amt:180},{id:uid(),label:"مطاعم",amt:240}],
   investments:[{id:uid(),label:"صندوق أسهم",amt:1500}],
-  obligations:[{id:uid(),label:"إيجار",amt:1200,paid:true},{id:uid(),label:"فاتورة جوال",amt:150,paid:true},{id:uid(),label:"قسط سيارة",amt:650,paid:false}],
+  obligations:[{id:uid(),label:"إيجار",amt:1200,paid:true},{id:uid(),label:"اشتراك نتفلكس",amt:45,paid:true,months:12,left:7},{id:uid(),label:"قسط سيارة",amt:650,paid:false}],
   history:[],active:"exp"};}
 function emptyState(){return{example:false,month:curMonth,incomes:[],carryExp:0,carryInv:0,expenses:[],investments:[],obligations:[],history:[],active:"exp"};}
 
@@ -185,6 +189,11 @@ function calc(){
     inv:{total:invTotal,used:invUsed,left:invTotal-invUsed},
     obl:{total:p.obl,used:oblPaid,left:p.obl-oblPaid,need:oblNeed,unpaid:oblNeed-oblPaid,gap:p.obl-oblNeed}};
 }
+const DURS=[["0","مستمر"],...Array.from({length:12},(_,i)=>[String(i+1),i===0?"شهر واحد":i===1?"شهرين":(i+1)+" شهور"]),["24","سنتين"]];
+function addMonths(m,n){let[y,mo]=m.split("-").map(Number);mo+=n;y+=Math.floor((mo-1)/12);mo=((mo-1)%12+12)%12+1;return y+"-"+String(mo).padStart(2,"0");}
+// Subscriptions: `left` counts this month too, so it ends in month + left - 1.
+const monthsWord=n=>n===1?"شهر":n===2?"شهرين":n<=10?n+" شهور":n+" شهر";
+function termText(o){return o.left<=1?"آخر شهر":`باقي ${monthsWord(o.left)} · ينتهي ${monthLabel(addMonths(S.month,o.left-1))}`;}
 function monthLabel(m){const[y,mo]=m.split("-");return MONTHS[+mo-1]+" "+y;}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -222,14 +231,15 @@ function render(){
         <div><span>باقي ما انْدفع</span><b class="num">${fmt(c.obl.unpaid)}</b></div>
       </div>
       <div>${c.obl.need?(c.obl.gap>=0?`<span class="pill good">الصندوق يغطي التزاماتك ويبقى ${fmt(c.obl.gap)} ريال</span>`:`<span class="pill bad">التزاماتك أكثر من الصندوق بـ ${fmt(-c.obl.gap)} ريال</span>`):""}</div>
-      <form class="add" data-list="obligations">
-        <input id="addLabel-obl" name="label" placeholder="اسم الالتزام (إيجار، قسط…)" required>
+      <form class="add dur" data-list="obligations">
+        <input id="addLabel-obl" name="label" placeholder="اسم الالتزام (إيجار، اشتراك…)" required>
         <input id="addAmt-obl" name="amt" class="num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="المبلغ الشهري" required>
+        <select id="addDur-obl" name="dur" aria-label="المدة">${DURS.map(([v,t])=>`<option value="${v}">${t}</option>`).join("")}</select>
         <button class="primary" type="submit">أضف</button>
       </form>
       <ul class="list">${S.obligations.length?S.obligations.map(o=>`<li class="${o.paid?"paid":""}">
         <input type="checkbox" id="paid-${o.id}" data-paid="${o.id}" ${o.paid?"checked":""} aria-label="مدفوع">
-        <label class="lbl" for="paid-${o.id}">${esc(o.label)}</label><b class="num">${fmt(h(o.amt))}</b>
+        <label class="lbl" for="paid-${o.id}">${esc(o.label)}${o.months?`<span class="term">${termText(o)}</span>`:""}</label><b class="num">${fmt(h(o.amt))}</b>
         <button class="link" type="button" data-del="obligations:${o.id}" aria-label="احذف">حذف</button></li>`).join("")
         :`<li class="empty">ما فيه التزامات. أضف التزاماتك الشهرية الثابتة، وأشّر عليها لما تدفعها.</li>`}</ul>`;
   }else{
@@ -280,7 +290,7 @@ document.getElementById("boxes").addEventListener("click",e=>{const b=e.target.c
 const P=document.getElementById("panel");
 P.addEventListener("submit",e=>{e.preventDefault();const f=e.target,list=f.dataset.list;
   const label=f.label.value.trim(),amt=Number(f.amt.value);if(!label||!(amt>0))return;
-  const item={id:uid(),label,amt};if(list==="obligations")item.paid=false;
+  const item={id:uid(),label,amt};if(list==="obligations"){item.paid=false;const d=Number(f.dur&&f.dur.value)||0;if(d>0){item.months=d;item.left=d;}}
   S[list].push(item);commit();const nf=P.querySelector("form.add");nf&&nf.label.focus();});
 P.addEventListener("click",e=>{const d=e.target.closest("[data-del]");if(!d)return;const[list,id]=d.dataset.del.split(":");S[list]=S[list].filter(x=>x.id!==id);commit();});
 P.addEventListener("change",e=>{
@@ -291,13 +301,13 @@ P.addEventListener("change",e=>{
 function nextMonth(m){let[y,mo]=m.split("-").map(Number);mo++;if(mo>12){mo=1;y++;}return y+"-"+String(mo).padStart(2,"0");}
 const cb=document.getElementById("confirmBox");
 document.getElementById("closeBtn").addEventListener("click",()=>{const c=calc();
-  document.getElementById("confirmText").textContent=`ينتقل ${fmt(Math.max(0,c.exp.left))} للمصاريف و ${fmt(Math.max(0,c.inv.left))} للاستثمار في ${monthLabel(nextMonth(S.month))}.`;
+  document.getElementById("confirmText").textContent=`ينتقل ${fmt(Math.max(0,c.exp.left))} للمصاريف و ${fmt(Math.max(0,c.inv.left))} للاستثمار في ${monthLabel(nextMonth(S.month))}.`+(()=>{const e=S.obligations.filter(o=>o.months&&o.left<=1).map(o=>o.label);return e.length?` وينتهي: ${e.join("، ")}.`:"";})();
   cb.hidden=false;});
 document.getElementById("confirmNo").addEventListener("click",()=>cb.hidden=true);
 document.getElementById("confirmYes").addEventListener("click",()=>{const c=calc();
   S.history.push({month:S.month,income:incomeTotal(),payments:S.incomes.length,expLeft:c.exp.left,invLeft:c.inv.left,invested:c.inv.used});
   S.carryExp=Math.max(0,c.exp.left)/100;S.carryInv=Math.max(0,c.inv.left)/100;
-  S.incomes=[];S.expenses=[];S.investments=[];S.obligations.forEach(o=>o.paid=false);
+  S.incomes=[];S.expenses=[];S.investments=[];S.obligations=S.obligations.filter(o=>!o.months||o.left>1);S.obligations.forEach(o=>{o.paid=false;if(o.months)o.left--;});
   S.month=nextMonth(S.month);cb.hidden=true;commit();});
 
 try{const raw=localStorage.getItem(LS);if(raw)S=load(JSON.parse(raw));}catch(e){}
