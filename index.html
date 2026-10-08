@@ -71,7 +71,7 @@ button.link:hover{color:var(--bad)}
 .carry{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .carry input{width:140px}
 form.add{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:8px}
-form.add.dur{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto}
+form.add.dur{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto}
 select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 8px;min-width:0;width:100%}
 select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:480px){form.add,form.add.dur{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}form.add button{grid-column:1/-1}}
@@ -93,6 +93,25 @@ th,td{text-align:start;padding:7px 8px;border-bottom:1px solid var(--line)}
 th{color:var(--muted);font-weight:500;font-size:.8rem}
 .scroll{overflow-x:auto}
 @media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+.monthnav{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px}
+.mn-title{display:flex;flex-direction:column;align-items:center;gap:2px;font-family:var(--display);font-size:1.1rem}
+.mn-title .pill{font-family:var(--body);color:var(--muted);background:var(--bg)}
+.mn-title .pill.good{color:var(--good);background:var(--inv-soft)}
+.banner.past{background:var(--obl-soft)}
+.alerts{display:flex;flex-direction:column;gap:8px}
+.alerts:empty{display:none}
+.alert{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border-radius:10px;padding:10px 14px;border:1px solid var(--line);background:var(--surface)}
+.alert.soon{background:var(--exp-soft);border-color:transparent}
+.alert.today,.alert.late{background:var(--exp-soft);border-color:var(--bad)}
+.alert.today span,.alert.late span{color:var(--bad)}
+.alert.info{background:var(--obl-soft);border-color:transparent}
+.due{font-size:.75rem;font-weight:600;white-space:nowrap;padding:2px 8px;border-radius:999px;color:var(--muted);background:var(--bg)}
+.due.soon{color:var(--exp);background:var(--exp-soft)}
+.due.today,.due.late{color:var(--bad);background:var(--exp-soft)}
+.due.ok{color:var(--good);background:var(--inv-soft)}
+ul.list .lbl .term{display:inline-block}
+tr.cur td{background:var(--accent-soft)}
+button:disabled{opacity:.4;cursor:default}
 </style>
 <style>body{margin:0}[hidden]{display:none!important}</style>
 </head>
@@ -102,20 +121,32 @@ th{color:var(--muted);font-weight:500;font-size:.8rem}
   <header>
     <div>
       <h1>صناديقي الثلاثة</h1>
-      <div class="month">شهر <span id="monthName"></span></div>
+      <div class="month" id="todayLine"></div>
     </div>
     <div class="save" id="saveState">يُحفظ على هذا الجهاز</div>
   </header>
 
+  <nav class="monthnav" aria-label="التنقل بين الشهور">
+    <button type="button" id="prevMonth" aria-label="الشهر السابق">→ السابق</button>
+    <div class="mn-title"><b id="monthName"></b><span id="monthTag"></span></div>
+    <button type="button" id="nextMonth" aria-label="الشهر التالي">التالي ←</button>
+  </nav>
+  <div class="banner past" id="pastBanner" hidden>
+    <span id="pastText">تشوف شهر سابق. تقدر تعدّل فيه، والباقي منه ينتقل تلقائيًا للشهور اللي بعده.</span>
+    <button type="button" id="goToday">ارجع للشهر الحالي</button>
+  </div>
+
   <div class="banner" id="exampleBanner" hidden>
-    <span>هذه أرقام مثال توضّح الطريقة. اكتب دخلك وعدّل القوائم، أو امسح المثال وابدأ من الصفر.</span>
+    <span>هذه أرقام مثال توضّح الطريقة. امسح المثال وابدأ بأرقامك.</span>
     <button id="clearExample" type="button">امسح المثال</button>
   </div>
+
+  <section class="alerts" id="alerts" aria-live="polite"></section>
 
   <section class="panel income-panel" style="--tone:var(--accent)">
     <div class="inc-head">
       <div>
-        <h2>دخل هذا الشهر</h2>
+        <h2>دخل <span id="incMonth">هذا الشهر</span></h2>
         <div class="muted">كل دفعة تضيفها تنحفظ وتنجمع، والمجموع يتقسّم بالتساوي على الصناديق</div>
       </div>
       <div class="inc-total"><span class="muted">المجموع</span><b class="num big" id="incomeTotal">0</b></div>
@@ -133,15 +164,9 @@ th{color:var(--muted);font-weight:500;font-size:.8rem}
 
   <section class="panel" id="panel"></section>
 
-  <section class="panel close" style="--tone:var(--accent)">
-    <h2>إقفال الشهر</h2>
-    <p class="muted" style="margin:0">لما ينتهي الشهر: الباقي من المصاريف والاستثمار ينتقل للشهر الجديد، قائمة الدخل تبدأ من الصفر، والالتزامات ترجع غير مدفوعة.</p>
-    <div><button id="closeBtn" type="button">أقفل الشهر وابدأ شهر جديد</button></div>
-    <div class="confirm" id="confirmBox" hidden>
-      <span id="confirmText"></span>
-      <button class="primary" id="confirmYes" type="button">نعم، أقفل</button>
-      <button id="confirmNo" type="button">تراجع</button>
-    </div>
+  <section class="panel" style="--tone:var(--accent)">
+    <h2>الشهور</h2>
+    <p class="muted" style="margin:0">كل شهر جديد يبدأ لحاله أول ما يدخل. الباقي من المصاريف والاستثمار ينتقل للشهر اللي بعده، والالتزامات ترجع غير مدفوعة. اضغط على أي شهر عشان تفتحه.</p>
     <div class="scroll" id="historyWrap"></div>
   </section>
 </div>
@@ -151,62 +176,131 @@ th{color:var(--muted);font-weight:500;font-size:.8rem}
 const NAMES={exp:"مصاريف",inv:"استثمار",obl:"التزامات"};
 const MONTHS=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const LS="three-boxes-v1";
-const today=new Date();
-const curMonth=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0");
 const uid=()=>Math.random().toString(36).slice(2,9);
-function dayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
-// Older saves held one `income` number; turn it into a single payment.
-function load(o){const s=Object.assign(emptyState(),o);
-  if(!Array.isArray(s.incomes))s.incomes=[];
-  if(Number(s.income)>0&&!s.incomes.length)s.incomes.push({id:uid(),label:"دخل",amt:Number(s.income),date:dayStr()});
-  delete s.income;return s;}
-
-function exampleState(){return{
-  example:true,month:curMonth,carryExp:250,carryInv:400,
-  incomes:[{id:uid(),label:"عميل: تصميم شعار",amt:2500,date:dayStr()},{id:uid(),label:"عميل: موقع متجر",amt:3500,date:dayStr()}],
-  expenses:[{id:uid(),label:"بقالة",amt:620},{id:uid(),label:"بنزين",amt:180},{id:uid(),label:"مطاعم",amt:240}],
-  investments:[{id:uid(),label:"صندوق أسهم",amt:1500}],
-  obligations:[{id:uid(),label:"إيجار",amt:1200,paid:true},{id:uid(),label:"اشتراك نتفلكس",amt:45,paid:true,months:12,left:7},{id:uid(),label:"قسط سيارة",amt:650,paid:false}],
-  history:[],active:"exp"};}
-function emptyState(){return{example:false,month:curMonth,incomes:[],carryExp:0,carryInv:0,expenses:[],investments:[],obligations:[],history:[],active:"exp"};}
-
-let S=exampleState();
-let docRef=null;
-
-// Money in halalas to avoid float drift; split remainder goes to the first boxes.
-const h=v=>Math.round((Number(v)||0)*100);
-const fmt=c=>(c/100).toLocaleString("ar-SA-u-nu-latn",{minimumFractionDigits:0,maximumFractionDigits:2});
-const incomeTotal=()=>S.incomes.reduce((s,x)=>s+h(x.amt),0);
-function split(){const t=incomeTotal(),b=Math.floor(t/3),r=t-b*3;return{exp:b+(r>0?1:0),inv:b+(r>1?1:0),obl:b};}
-const sum=a=>a.reduce((s,x)=>s+h(x.amt),0);
-function calc(){
-  const p=split();
-  const expTotal=p.exp+h(S.carryExp),expUsed=sum(S.expenses);
-  const invTotal=p.inv+h(S.carryInv),invUsed=sum(S.investments);
-  const oblNeed=sum(S.obligations),oblPaid=sum(S.obligations.filter(o=>o.paid));
-  return{p,
-    exp:{total:expTotal,used:expUsed,left:expTotal-expUsed},
-    inv:{total:invTotal,used:invUsed,left:invTotal-invUsed},
-    obl:{total:p.obl,used:oblPaid,left:p.obl-oblPaid,need:oblNeed,unpaid:oblNeed-oblPaid,gap:p.obl-oblNeed}};
-}
-const DURS=[["0","مستمر"],...Array.from({length:12},(_,i)=>[String(i+1),i===0?"شهر واحد":i===1?"شهرين":(i+1)+" شهور"]),["24","سنتين"]];
-function addMonths(m,n){let[y,mo]=m.split("-").map(Number);mo+=n;y+=Math.floor((mo-1)/12);mo=((mo-1)%12+12)%12+1;return y+"-"+String(mo).padStart(2,"0");}
-// Subscriptions: `left` counts this month too, so it ends in month + left - 1.
-const monthsWord=n=>n===1?"شهر":n===2?"شهرين":n<=10?n+" شهور":n+" شهر";
-function termText(o){return o.left<=1?"آخر شهر":`باقي ${monthsWord(o.left)} · ينتهي ${monthLabel(addMonths(S.month,o.left-1))}`;}
+const pad=n=>String(n).padStart(2,"0");
+const mKey=d=>d.getFullYear()+"-"+pad(d.getMonth()+1);
+const dKey=d=>mKey(d)+"-"+pad(d.getDate());
+function addMonths(m,n){let[y,mo]=m.split("-").map(Number);mo+=n;y+=Math.floor((mo-1)/12);mo=((mo-1)%12+12)%12+1;return y+"-"+pad(mo);}
+const monthDiff=(a,b)=>{const[ay,am]=a.split("-").map(Number),[by,bm]=b.split("-").map(Number);return(by-ay)*12+(bm-am);};
+const daysIn=m=>{const[y,mo]=m.split("-").map(Number);return new Date(y,mo,0).getDate();};
 function monthLabel(m){const[y,mo]=m.split("-");return MONTHS[+mo-1]+" "+y;}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const h=v=>Math.round((Number(v)||0)*100);
+const fmt=c=>(c/100).toLocaleString("ar-SA-u-nu-latn",{minimumFractionDigits:0,maximumFractionDigits:2});
+const sum=a=>a.reduce((s,x)=>s+h(x.amt),0);
+
+let now=new Date(),curMonth=mKey(now);
+const DURS=[["0","مستمر"],...Array.from({length:12},(_,i)=>[String(i+1),i===0?"شهر واحد":i===1?"شهرين":(i+1)+" شهور"]),["24","سنتين"]];
+const monthsWord=n=>n===1?"شهر":n===2?"شهرين":n<=10?n+" شهور":n+" شهر";
+const daysWord=n=>n===1?"يوم":n===2?"يومين":n<=10?n+" أيام":n+" يوم";
+
+/* State (v2):
+   months[YYYY-MM] = {incomes, expenses, investments, paid:{oblId:true}, carryExp?, carryInv? (manual overrides), legacy?}
+   obligations = [{id,label,amt,due (day of month or 0), start: YYYY-MM, months (0 = ongoing), until?: YYYY-MM exclusive}] */
+const blankMonth=()=>({incomes:[],expenses:[],investments:[],paid:{}});
+function emptyState(){return{v:2,example:false,months:{[curMonth]:blankMonth()},obligations:[],active:"exp"};}
+function exampleState(){
+  const prev=addMonths(curMonth,-1),d=now.getDate(),day=n=>Math.min(Math.max(1,n),28);
+  const rent=uid(),phone=uid(),netflix=uid(),car=uid();
+  return{v:2,example:true,active:"obl",
+    obligations:[
+      {id:rent,label:"إيجار",amt:1200,due:1,start:prev,months:0},
+      {id:car,label:"قسط سيارة",amt:650,due:day(d+2),start:prev,months:0},
+      {id:netflix,label:"اشتراك نتفلكس",amt:45,due:day(d),start:addMonths(curMonth,-5),months:6},
+      {id:phone,label:"فاتورة جوال",amt:150,due:day(d+9),start:prev,months:0}],
+    months:{
+      [prev]:{incomes:[{id:uid(),label:"عميل: هوية بصرية",amt:4200,date:prev+"-06"}],expenses:[{id:uid(),label:"بقالة",amt:900},{id:uid(),label:"بنزين",amt:250}],investments:[{id:uid(),label:"صندوق أسهم",amt:1000}],paid:{[rent]:1,[car]:1,[netflix]:1,[phone]:1}},
+      [curMonth]:{incomes:[{id:uid(),label:"عميل: تصميم شعار",amt:2500,date:curMonth+"-02"},{id:uid(),label:"عميل: موقع متجر",amt:3500,date:dKey(now)}],
+        expenses:[{id:uid(),label:"بقالة",amt:620},{id:uid(),label:"مطاعم",amt:240}],investments:[{id:uid(),label:"صندوق أسهم",amt:1500}],paid:{[rent]:1}}}};
+}
+
+// v1 saves: one open month with obligations carrying {paid, months, left}, plus closed-month summaries in `history`.
+function migrate(o){
+  if(o&&o.v===2){const s=Object.assign(emptyState(),o);return s;}
+  const s=emptyState();s.months={};s.example=!!o.example;s.active=o.active||"exp";
+  const m=o.month||curMonth;
+  (o.history||[]).forEach(r=>{s.months[r.month]={incomes:[],expenses:[],investments:[],paid:{},legacy:{income:r.income,expLeft:r.expLeft,invLeft:r.invLeft,invested:r.invested,payments:r.payments||0}};});
+  const incomes=Array.isArray(o.incomes)?o.incomes:(Number(o.income)>0?[{id:uid(),label:"دخل",amt:Number(o.income),date:m+"-01"}]:[]);
+  const paid={};
+  s.obligations=(o.obligations||[]).map(x=>{if(x.paid)paid[x.id]=1;const months=x.months||0;
+    return{id:x.id,label:x.label,amt:x.amt,due:0,start:months?addMonths(m,-(months-(x.left||months))):m,months};});
+  s.months[m]={incomes,expenses:o.expenses||[],investments:o.investments||[],paid,
+    carryExp:Number(o.carryExp)?o.carryExp:undefined,carryInv:Number(o.carryInv)?o.carryInv:undefined};
+  return s;
+}
+
+let S=exampleState(),view=curMonth;
+function ensureMonth(m){if(!S.months[m])S.months[m]=blankMonth();return S.months[m];}
+const sortedMonths=()=>Object.keys(S.months).sort();
+const firstMonth=()=>sortedMonths()[0]||curMonth;
+
+function activeObls(m){return S.obligations.filter(o=>monthDiff(o.start,m)>=0&&(!o.months||monthDiff(o.start,m)<o.months)&&(!o.until||monthDiff(m,o.until)>0));}
+
+// Money per month, chained so each month's leftovers become the next month's carry.
+function calcAll(){
+  const out={};let prev=null;
+  const last=sortedMonths().concat([curMonth,view]).sort().pop();
+  for(let m=firstMonth();monthDiff(m,last)>=0;m=addMonths(m,1)){
+    const M=S.months[m]||blankMonth();
+    if(M.legacy){out[m]={legacy:true,income:M.legacy.income,exp:{left:M.legacy.expLeft,used:0,total:0},inv:{left:M.legacy.invLeft,used:M.legacy.invested,total:0},obl:{need:0,used:0}};prev=out[m];continue;}
+    const t=sum(M.incomes),b=Math.floor(t/3),r=t-b*3,p={exp:b+(r>0?1:0),inv:b+(r>1?1:0),obl:b};
+    const autoExp=prev?Math.max(0,prev.exp.left):0,autoInv=prev?Math.max(0,prev.inv.left):0;
+    const cExp=M.carryExp!=null&&M.carryExp!==""?h(M.carryExp):autoExp,cInv=M.carryInv!=null&&M.carryInv!==""?h(M.carryInv):autoInv;
+    const obls=activeObls(m),need=sum(obls),paidAmt=sum(obls.filter(o=>M.paid[o.id]));
+    const expT=p.exp+cExp,invT=p.inv+cInv;
+    out[m]={income:t,p,carryExp:cExp,carryInv:cInv,autoExp,autoInv,
+      exp:{total:expT,used:sum(M.expenses),left:expT-sum(M.expenses)},
+      inv:{total:invT,used:sum(M.investments),left:invT-sum(M.investments)},
+      obl:{total:p.obl,used:paidAmt,left:p.obl-paidAmt,need,unpaid:need-paidAmt,gap:p.obl-need}};
+    prev=out[m];
+  }
+  return out;
+}
+
+// Days from today to this obligation's due date in month m (negative = overdue).
+function dueInfo(o,m){
+  if(!o.due)return null;
+  const[y,mo]=m.split("-").map(Number),d=Math.min(o.due,daysIn(m));
+  const due=new Date(y,mo-1,d),t=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  return{days:Math.round((due-t)/864e5),day:d};
+}
+function dueText(n){return n>3?`باقي ${daysWord(n)}`:n===3?"باقي ٣ أيام":n===2?"باقي يومين":n===1?"باقي يوم":n===0?"اليوم لازم تسدد":`متأخر ${daysWord(-n)}`;}
+const lastMonthOf=o=>o.months?addMonths(o.start,o.months-1):null;
 
 function render(){
-  const c=calc();
-  document.getElementById("monthName").textContent=monthLabel(S.month);
+  now=new Date();
+  const C=calcAll(),c=C[view],M=ensureMonth(view),isCur=view===curMonth,isPast=monthDiff(view,curMonth)>0;
+  document.getElementById("todayLine").textContent="اليوم "+now.getDate()+" "+MONTHS[now.getMonth()]+" "+now.getFullYear();
+  document.getElementById("monthName").textContent=monthLabel(view);
+  document.getElementById("monthTag").textContent=isCur?"الشهر الحالي":isPast?"شهر سابق":"شهر قادم";
+  document.getElementById("monthTag").className="pill "+(isCur?"good":"");
+  document.getElementById("pastBanner").hidden=isCur;
+  document.getElementById("pastText").textContent=isPast?"تشوف شهر سابق. تقدر تعدّل فيه، والباقي منه ينتقل تلقائيًا للشهور اللي بعده.":"تشوف شهر قادم. تقدر تسجّل فيه من الحين.";
   document.getElementById("exampleBanner").hidden=!S.example;
-  document.getElementById("incomeTotal").textContent=fmt(incomeTotal());
-  document.getElementById("incomeList").innerHTML=S.incomes.length?S.incomes.map(e=>`<li>
-    <span class="lbl">${esc(e.label||"دفعة")}<br><span class="date num">${esc(e.date||"")}</span></span><b class="num">+${fmt(h(e.amt))}</b>
-    <button class="link" type="button" data-del="incomes:${e.id}" aria-label="احذف">حذف</button></li>`).join("")
-    :`<li class="empty">ما سجّلت دخل هالشهر. كل ما جاك مبلغ من عميل أضفه هنا ويتوزع على الصناديق.</li>`;
-  document.getElementById("third").textContent=fmt(c.p.obl)+(c.p.exp!==c.p.obl?" تقريبًا":"");
+  document.getElementById("incMonth").textContent=isCur?"هذا الشهر":monthLabel(view);
+
+  // Alerts: current month obligations due within 3 days or overdue, and subscriptions in their last month.
+  const A=[];
+  activeObls(curMonth).forEach(o=>{
+    const MM=ensureMonth(curMonth);if(MM.paid[o.id])return;const di=dueInfo(o,curMonth);
+    if(di&&di.days<=3)A.push({lvl:di.days<0?"late":di.days===0?"today":"soon",days:di.days,html:`<b>${esc(o.label)}</b> <span class="num">${fmt(h(o.amt))}</span> ريال: ${dueText(di.days)}`,id:o.id});
+  });
+  S.obligations.forEach(o=>{if(o.months&&lastMonthOf(o)===curMonth&&!o.until)A.push({lvl:"info",days:99,html:`<b>${esc(o.label)}</b>: هذا آخر شهر في المدة، وينتهي بعدها`});});
+  A.sort((a,b)=>a.days-b.days);
+  document.getElementById("alerts").innerHTML=A.map(a=>`<div class="alert ${a.lvl}"><span>${a.html}</span>${a.id?`<button type="button" data-payalert="${a.id}">سددت</button>`:""}</div>`).join("");
+
+  if(c.legacy){
+    document.getElementById("incomeTotal").textContent=fmt(c.income);
+    document.getElementById("incomeList").innerHTML=`<li class="empty">هذا الشهر انقفل قبل التحديث، ومحفوظ منه المجموع بس.</li>`;
+    document.getElementById("third").textContent=fmt(Math.floor(c.income/3));
+  }else{
+    document.getElementById("incomeTotal").textContent=fmt(c.income);
+    document.getElementById("incomeList").innerHTML=M.incomes.length?M.incomes.map(e=>`<li>
+      <span class="lbl">${esc(e.label||"دفعة")}<br><span class="date num">${esc(e.date||"")}</span></span><b class="num">+${fmt(h(e.amt))}</b>
+      <button class="link" type="button" data-del="incomes:${e.id}" aria-label="احذف">حذف</button></li>`).join("")
+      :`<li class="empty">ما سجّلت دخل ${isCur?"هالشهر":"في "+monthLabel(view)}. كل ما جاك مبلغ من عميل أضفه هنا ويتوزع على الصناديق.</li>`;
+    document.getElementById("third").textContent=fmt(c.p.obl)+(c.p.exp!==c.p.obl?" تقريبًا":"");
+  }
 
   const box=(k,sub)=>{const d=c[k];const pct=d.total>0?Math.min(100,Math.max(0,d.used/d.total*100)):0;
     return `<button type="button" class="box t-${k}" data-k="${k}" aria-pressed="${S.active===k}">
@@ -216,13 +310,26 @@ function render(){
       <span class="bar"><i style="width:${pct}%"></i></span>
       ${sub?`<span class="row"><span>${sub}</span></span>`:""}
     </button>`;};
-  document.getElementById("boxes").innerHTML=
-    box("exp",S.carryExp?`منها ${fmt(h(S.carryExp))} باقي الشهر الماضي`:"")+
-    box("inv",S.carryInv?`منها ${fmt(h(S.carryInv))} باقي الشهر الماضي`:"")+
-    box("obl",c.obl.need?(c.obl.gap>=0?`يكفي الالتزامات ويفيض ${fmt(c.obl.gap)}`:`ينقص ${fmt(-c.obl.gap)} عن الالتزامات`):"");
+  const B=document.getElementById("boxes"),P=document.getElementById("panel");
+  if(c.legacy){B.innerHTML="";P.hidden=true;}
+  else{
+    P.hidden=false;
+    B.innerHTML=box("exp",c.carryExp?`منها ${fmt(c.carryExp)} باقي الشهر الماضي`:"")+box("inv",c.carryInv?`منها ${fmt(c.carryInv)} باقي الشهر الماضي`:"")+
+      box("obl",c.obl.need?(c.obl.gap>=0?`يكفي الالتزامات ويفيض ${fmt(c.obl.gap)}`:`ينقص ${fmt(-c.obl.gap)} عن الالتزامات`):"");
+    renderPanel(c,M);
+  }
 
+  const months=[];for(let m=curMonth;monthDiff(firstMonth(),m)>=0;m=addMonths(m,-1))months.push(m);
+  document.getElementById("historyWrap").innerHTML=`<table><thead><tr><th>الشهر</th><th>الدخل</th><th>باقي المصاريف</th><th>باقي الاستثمار</th><th>المستثمر</th><th></th></tr></thead><tbody>${
+    months.map(m=>{const r=C[m];return `<tr class="${m===view?"cur":""}"><td>${monthLabel(m)}${m===curMonth?' <span class="pill good">الحالي</span>':""}</td><td class="num">${fmt(r.income)}</td><td class="num">${fmt(r.exp.left)}</td><td class="num">${fmt(r.inv.left)}</td><td class="num">${fmt(r.inv.used)}</td>
+      <td>${m===view?'<span class="muted">مفتوح</span>':`<button type="button" class="link open" data-go="${m}">افتح</button>`}</td></tr>`;}).join("")
+  }</tbody></table>`;
+}
+
+function renderPanel(c,M){
   const k=S.active,P=document.getElementById("panel");P.className="panel t-"+k;
   if(k==="obl"){
+    const obls=activeObls(view);
     P.innerHTML=`<h2>الالتزامات الشهرية</h2>
       <div class="summary">
         <div><span>مخصص الصندوق</span><b class="num">${fmt(c.obl.total)}</b></div>
@@ -234,85 +341,94 @@ function render(){
       <form class="add dur" data-list="obligations">
         <input id="addLabel-obl" name="label" placeholder="اسم الالتزام (إيجار، اشتراك…)" required>
         <input id="addAmt-obl" name="amt" class="num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="المبلغ الشهري" required>
+        <select id="addDue-obl" name="due" aria-label="يوم السداد"><option value="0">يوم السداد</option>${Array.from({length:31},(_,i)=>`<option value="${i+1}">يوم ${i+1}</option>`).join("")}</select>
         <select id="addDur-obl" name="dur" aria-label="المدة">${DURS.map(([v,t])=>`<option value="${v}">${t}</option>`).join("")}</select>
         <button class="primary" type="submit">أضف</button>
       </form>
-      <ul class="list">${S.obligations.length?S.obligations.map(o=>`<li class="${o.paid?"paid":""}">
-        <input type="checkbox" id="paid-${o.id}" data-paid="${o.id}" ${o.paid?"checked":""} aria-label="مدفوع">
-        <label class="lbl" for="paid-${o.id}">${esc(o.label)}${o.months?`<span class="term">${termText(o)}</span>`:""}</label><b class="num">${fmt(h(o.amt))}</b>
-        <button class="link" type="button" data-del="obligations:${o.id}" aria-label="احذف">حذف</button></li>`).join("")
-        :`<li class="empty">ما فيه التزامات. أضف التزاماتك الشهرية الثابتة، وأشّر عليها لما تدفعها.</li>`}</ul>`;
+      <ul class="list">${obls.length?obls.map(o=>{
+        const paid=!!M.paid[o.id],di=dueInfo(o,view),idx=monthDiff(o.start,view)+1;
+        const chip=paid?`<span class="due ok">مدفوع</span>`:di?(view===curMonth?`<span class="due ${di.days<0?"late":di.days===0?"today":di.days<=3?"soon":""}">${dueText(di.days)}</span>`
+          :monthDiff(view,curMonth)>0?`<span class="due late">ما انْدفع</span>`:`<span class="due">يوم ${di.day}</span>`):"";
+        const term=o.months?`<span class="term">${idx===o.months?"آخر شهر":`شهر ${idx} من ${o.months} · ينتهي ${monthLabel(lastMonthOf(o))}`}</span>`:"";
+        return `<li class="${paid?"paid":""}">
+        <input type="checkbox" id="paid-${o.id}" data-paid="${o.id}" ${paid?"checked":""} aria-label="مدفوع">
+        <label class="lbl" for="paid-${o.id}"><span class="ln">${esc(o.label)}</span>${o.due?`<span class="date"> · يستحق يوم ${o.due}</span>`:""}${term}</label>
+        ${chip}<b class="num">${fmt(h(o.amt))}</b>
+        <button class="link" type="button" data-delobl="${o.id}" aria-label="احذف">حذف</button></li>`;}).join("")
+        :`<li class="empty">ما فيه التزامات. أضف التزاماتك الشهرية، وحدد يوم السداد عشان أذكّرك قبلها.</li>`}</ul>`;
   }else{
-    const list=k==="exp"?"expenses":"investments",d=c[k],carryKey=k==="exp"?"carryExp":"carryInv";
+    const list=k==="exp"?"expenses":"investments",d=c[k],carryKey=k==="exp"?"carryExp":"carryInv",auto=k==="exp"?c.autoExp:c.autoInv,hasOv=M[carryKey]!=null&&M[carryKey]!=="";
     P.innerHTML=`<h2>${k==="exp"?"المصاريف":"الاستثمار"}</h2>
       <div class="summary">
-        <div><span>نصيبه من المبلغ</span><b class="num">${fmt(c.p[k])}</b></div>
-        <div><span>باقي من الشهر الماضي</span><b class="num">${fmt(h(S[carryKey]))}</b></div>
+        <div><span>نصيبه من الدخل</span><b class="num">${fmt(c.p[k])}</b></div>
+        <div><span>باقي من الشهر الماضي</span><b class="num">${fmt(c[carryKey])}</b></div>
         <div><span>${k==="exp"?"صرفت":"استثمرت"}</span><b class="num">${fmt(d.used)}</b></div>
         <div><span>الباقي</span><b class="num" style="${d.left<0?"color:var(--bad)":""}">${fmt(d.left)}</b></div>
       </div>
-      <div class="carry"><label for="carry-${k}">عدّل الباقي من الشهر الماضي:</label>
-        <input id="carry-${k}" data-carry="${carryKey}" class="num" type="number" inputmode="decimal" step="0.01" value="${S[carryKey]||""}" placeholder="0"></div>
+      <div class="carry"><label for="carry-${k}">الباقي من الشهر الماضي ينحسب لحاله (${fmt(auto)}). تبي تغيّره؟</label>
+        <input id="carry-${k}" data-carry="${carryKey}" class="num" type="number" inputmode="decimal" step="0.01" value="${hasOv?M[carryKey]:""}" placeholder="${fmt(auto)}">
+        ${hasOv?`<button class="link" type="button" data-resetcarry="${carryKey}">رجّعه تلقائي</button>`:""}</div>
       <form class="add" data-list="${list}">
         <input id="addLabel-${k}" name="label" placeholder="${k==="exp"?"وش صرفت؟ (بقالة، بنزين…)":"وين استثمرت؟ (أسهم، ذهب…)"}" required>
         <input id="addAmt-${k}" name="amt" class="num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="المبلغ" required>
         <button class="primary" type="submit">أضف</button>
       </form>
-      <ul class="list">${S[list].length?S[list].map(e=>`<li><span class="lbl">${esc(e.label)}</span><b class="num">${fmt(h(e.amt))}</b>
+      <ul class="list">${M[list].length?M[list].map(e=>`<li><span class="lbl">${esc(e.label)}${e.date?`<br><span class="date num">${esc(e.date)}</span>`:""}</span><b class="num">${fmt(h(e.amt))}</b>
         <button class="link" type="button" data-del="${list}:${e.id}" aria-label="احذف">حذف</button></li>`).join("")
-        :`<li class="empty">${k==="exp"?"ما سجّلت مصاريف هالشهر.":"ما سجّلت استثمارات هالشهر."} أضف أول مبلغ من فوق.</li>`}</ul>`;
+        :`<li class="empty">${k==="exp"?"ما سجّلت مصاريف":"ما سجّلت استثمارات"} في ${monthLabel(view)}. أضف أول مبلغ من فوق.</li>`}</ul>`;
   }
-
-  const H=document.getElementById("historyWrap");
-  H.innerHTML=S.history.length?`<table><thead><tr><th>الشهر</th><th>الدخل</th><th>باقي المصاريف</th><th>باقي الاستثمار</th><th>المستثمر</th></tr></thead><tbody>${
-    S.history.slice().reverse().map(r=>`<tr><td>${monthLabel(r.month)}</td><td class="num">${fmt(r.income)}${r.payments?` <span class="date">(${r.payments} دفعات)</span>`:""}</td><td class="num">${fmt(r.expLeft)}</td><td class="num">${fmt(r.invLeft)}</td><td class="num">${fmt(r.invested)}</td></tr>`).join("")
-  }</tbody></table>`:"";
 }
 
-let saveTimer=null;
-function commit(){
-  if(S.example){S.example=false;}
-  render();
-  try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}
-  if(docRef){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{
-    docRef.set(JSON.parse(JSON.stringify(S))).then(()=>status("محفوظ في حسابك")).catch(()=>status("تعذّر الحفظ في الحساب، محفوظ على هذا الجهاز"));
-  },500);}
-}
 const status=t=>document.getElementById("saveState").textContent=t;
+function commit(){
+  if(S.example)S.example=false;
+  render();
+  try{localStorage.setItem(LS,JSON.stringify(S));status("محفوظ على هذا الجهاز");}catch(e){status("ما قدرت أحفظ في المتصفح");}
+}
+// Date stamp for new entries: today when viewing this month, else the 1st of the viewed month.
+const entryDate=()=>view===curMonth?dKey(now):view+"-01";
 
 const IF=document.getElementById("incomeForm");
 IF.addEventListener("submit",e=>{e.preventDefault();const amt=Number(IF.amt.value);if(!(amt>0))return;
-  S.incomes.push({id:uid(),label:IF.label.value.trim(),amt,date:dayStr()});IF.reset();commit();IF.label.focus();});
+  ensureMonth(view).incomes.push({id:uid(),label:IF.label.value.trim(),amt,date:entryDate()});IF.reset();commit();IF.label.focus();});
 document.getElementById("incomeList").addEventListener("click",e=>{const d=e.target.closest("[data-del]");if(!d)return;
-  const id=d.dataset.del.split(":")[1];S.incomes=S.incomes.filter(x=>x.id!==id);commit();});
-document.getElementById("clearExample").addEventListener("click",()=>{S=emptyState();commit();IF.label.focus();});
+  const id=d.dataset.del.split(":")[1],M=ensureMonth(view);M.incomes=M.incomes.filter(x=>x.id!==id);commit();});
+document.getElementById("clearExample").addEventListener("click",()=>{S=emptyState();view=curMonth;commit();IF.label.focus();});
 document.getElementById("boxes").addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(!b)return;S.active=b.dataset.k;render();});
+document.getElementById("prevMonth").addEventListener("click",()=>{view=addMonths(view,-1);render();});
+document.getElementById("nextMonth").addEventListener("click",()=>{view=addMonths(view,1);render();});
+document.getElementById("goToday").addEventListener("click",()=>{view=curMonth;render();});
+document.getElementById("historyWrap").addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(!b)return;view=b.dataset.go;render();window.scrollTo({top:0,behavior:"smooth"});});
+document.getElementById("alerts").addEventListener("click",e=>{const b=e.target.closest("[data-payalert]");if(!b)return;ensureMonth(curMonth).paid[b.dataset.payalert]=1;commit();});
+
 const P=document.getElementById("panel");
 P.addEventListener("submit",e=>{e.preventDefault();const f=e.target,list=f.dataset.list;
   const label=f.label.value.trim(),amt=Number(f.amt.value);if(!label||!(amt>0))return;
-  const item={id:uid(),label,amt};if(list==="obligations"){item.paid=false;const d=Number(f.dur&&f.dur.value)||0;if(d>0){item.months=d;item.left=d;}}
-  S[list].push(item);commit();const nf=P.querySelector("form.add");nf&&nf.label.focus();});
-P.addEventListener("click",e=>{const d=e.target.closest("[data-del]");if(!d)return;const[list,id]=d.dataset.del.split(":");S[list]=S[list].filter(x=>x.id!==id);commit();});
+  if(list==="obligations"){S.obligations.push({id:uid(),label,amt,due:Number(f.due.value)||0,start:view,months:Number(f.dur.value)||0});}
+  else ensureMonth(view)[list].push({id:uid(),label,amt,date:entryDate()});
+  commit();const nf=P.querySelector("form.add");nf&&nf.label.focus();});
+P.addEventListener("click",e=>{
+  const d=e.target.closest("[data-del]");if(d){const[list,id]=d.dataset.del.split(":"),M=ensureMonth(view);M[list]=M[list].filter(x=>x.id!==id);commit();return;}
+  // Deleting an obligation stops it from this month on; earlier months keep it.
+  const o=e.target.closest("[data-delobl]");if(o){const id=o.dataset.delobl,ob=S.obligations.find(x=>x.id===id);if(!ob)return;
+    if(monthDiff(ob.start,view)<=0)S.obligations=S.obligations.filter(x=>x.id!==id);else ob.until=view;commit();return;}
+  const r=e.target.closest("[data-resetcarry]");if(r){delete ensureMonth(view)[r.dataset.resetcarry];commit();}
+});
 P.addEventListener("change",e=>{
-  if(e.target.dataset.paid){const o=S.obligations.find(x=>x.id===e.target.dataset.paid);if(o){o.paid=e.target.checked;commit();}}
-  if(e.target.dataset.carry){S[e.target.dataset.carry]=e.target.value;commit();}
+  if(e.target.dataset.paid){const M=ensureMonth(view);if(e.target.checked)M.paid[e.target.dataset.paid]=1;else delete M.paid[e.target.dataset.paid];commit();}
+  if(e.target.dataset.carry){const v=e.target.value;if(v==="")delete ensureMonth(view)[e.target.dataset.carry];else ensureMonth(view)[e.target.dataset.carry]=v;commit();}
 });
 
-function nextMonth(m){let[y,mo]=m.split("-").map(Number);mo++;if(mo>12){mo=1;y++;}return y+"-"+String(mo).padStart(2,"0");}
-const cb=document.getElementById("confirmBox");
-document.getElementById("closeBtn").addEventListener("click",()=>{const c=calc();
-  document.getElementById("confirmText").textContent=`ينتقل ${fmt(Math.max(0,c.exp.left))} للمصاريف و ${fmt(Math.max(0,c.inv.left))} للاستثمار في ${monthLabel(nextMonth(S.month))}.`+(()=>{const e=S.obligations.filter(o=>o.months&&o.left<=1).map(o=>o.label);return e.length?` وينتهي: ${e.join("، ")}.`:"";})();
-  cb.hidden=false;});
-document.getElementById("confirmNo").addEventListener("click",()=>cb.hidden=true);
-document.getElementById("confirmYes").addEventListener("click",()=>{const c=calc();
-  S.history.push({month:S.month,income:incomeTotal(),payments:S.incomes.length,expLeft:c.exp.left,invLeft:c.inv.left,invested:c.inv.used});
-  S.carryExp=Math.max(0,c.exp.left)/100;S.carryInv=Math.max(0,c.inv.left)/100;
-  S.incomes=[];S.expenses=[];S.investments=[];S.obligations=S.obligations.filter(o=>!o.months||o.left>1);S.obligations.forEach(o=>{o.paid=false;if(o.months)o.left--;});
-  S.month=nextMonth(S.month);cb.hidden=true;commit();});
-
-try{const raw=localStorage.getItem(LS);if(raw)S=load(JSON.parse(raw));}catch(e){}
+try{const raw=localStorage.getItem(LS);if(raw){S=migrate(JSON.parse(raw));}}catch(e){}
+ensureMonth(curMonth);
 render();
 
+// Roll over by the real date: re-check every minute and when the tab comes back into view.
+function tick(){const n=new Date(),m=mKey(n),changed=dKey(n)!==dKey(now);
+  if(m!==curMonth){const wasCur=view===curMonth;curMonth=m;ensureMonth(m);if(wasCur)view=m;try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
+  if(changed)render();}
+setInterval(tick,60000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)tick();});
 })();
 </script>
 </body>
